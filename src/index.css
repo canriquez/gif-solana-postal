@@ -11,3 +11,12 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.chip-user-address {
+  width: 100%;
+  margin-top: 10px;
+}
+.chip-user-address span {
+  color: white;
+  font-size: 14px;
+}

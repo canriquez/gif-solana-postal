@@ -1,14 +1,40 @@
+import { Connection, PublicKey, clusterApiUrl} from '@solana/web3.js';
+import { Program, Provider, web3 } from '@project-serum/anchor';
 import { useEffect, useState } from 'react';
-import AwesomeSubmitButton from './components/AwesomeSubmitButton'
-import twitterLogo from './assets/twitter-logo.svg';
-import Button from '@mui/material/Button';
-import MindReaderTextField from './components/MindReaderTextField';
-import LoadingButton from '@mui/lab/LoadingButton';
-import SaveIcon from '@mui/icons-material/Save';
 
 import './App.css';
+import kp from './keypair.json'
+
+import AwesomeSubmitButton from './components/AwesomeSubmitButton'
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import idl from './idl.json';
+import MindReaderTextField from './components/MindReaderTextField';
+import twitterLogo from './assets/twitter-logo.svg';
+
 
 // Constants
+// SystemProgram is a reference to the Solana runtime!
+const { SystemProgram, Keypair } = web3;
+
+// Create a keypair for the account that will hold the GIF data.
+//let baseAccount = Keypair.generate();
+
+const arr = Object.values(kp._keypair.secretKey)
+const secret = new Uint8Array(arr)
+const baseAccount = web3.Keypair.fromSecretKey(secret)
+
+// Set our network to devent.
+const network = clusterApiUrl('devnet');
+
+// Get our program's id form the IDL file.
+const programID = new PublicKey(idl.metadata.address);
+
+// Control's how we want to acknowledge when a trasnaction is "done".
+const opts = {
+  preflightCommitment: "processed"
+}
+
 const TWITTER_HANDLE = '_buildspace';
 const TWITTER_LINK = `https://twitter.com/${TWITTER_HANDLE}`;
 
@@ -24,6 +50,7 @@ const App = () => {
   const [walletAddress, setWalletAddress] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const [gifList, setGifList] = useState([]);
+  const [mindReadingGif, setMindReadingGif] = useState('')
 
   // Actions
   const checkIfWalletIsConnected = async () => {
@@ -63,10 +90,26 @@ const App = () => {
   };
 
   const sendGif = async () => {
-    if (inputValue.length > 0) {
-      console.log('Gif link:', inputValue);
-    } else {
-      console.log('Empty input. Try again.');
+    if (inputValue.length === 0) {
+      console.log("No gif link given!")
+      return
+    }
+    console.log('Gif link:', inputValue);
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+  
+      await program.rpc.addGif(inputValue, {
+        accounts: {
+          baseAccount: baseAccount.publicKey,
+          user: provider.wallet.publicKey,
+        },
+      });
+      console.log("GIF successfully sent to program", inputValue)
+  
+      await getGifList();
+    } catch (error) {
+      console.log("Error sending GIF:", error)
     }
   };
 
@@ -74,6 +117,54 @@ const App = () => {
     const { value } = event.target;
     setInputValue(value);
   };
+
+  const ReadGifMind = async () => {
+    console.log("ReadGifMind - Called")
+    if (inputValue === '') {
+      return
+    }
+    const response = await fetch(`https://api.giphy.com/v1/gifs/translate?api_key=50YVJEj4njpCtOZIPv2HcIKoRAWbuS0B&s=${inputValue}`,
+      { mode: 'cors' });
+    const responseObject = await response.json();
+  
+    const foundUrl = responseObject.data.images.original.url;
+  
+    if (!foundUrl) {
+      return Promise.reject(new Error('I dont have that mood for you!'));
+    }
+    setMindReadingGif(foundUrl)
+    console.log(mindReadingGif)
+    return Promise.resolve('all green');
+  }
+
+  const getProvider = () => {
+    const connection = new Connection(network, opts.preflightCommitment);
+    const provider = new Provider(
+      connection, window.solana, opts.preflightCommitment,
+    );
+    return provider;
+  }
+
+  const createGifAccount = async () => {
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+      console.log("ping")
+      await program.rpc.startStuffOff({
+        accounts: {
+          baseAccount: baseAccount.publicKey,
+          user: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
+        signers: [baseAccount]
+      });
+      console.log("Created a new BaseAccount w/ address:", baseAccount.publicKey.toString())
+      await getGifList();
+  
+    } catch(error) {
+      console.log("Error creating BaseAccount account:", error)
+    }
+  }
 
   const renderNotConnectedContainer = () => (
     <Button 
@@ -84,40 +175,74 @@ const App = () => {
     </Button>
   );
 
-  const renderConnectedContainer = () => (
-    <div className="connected-container">
-      <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            //sendGif();
-          }}
-        >
-      {/*         <input type="text" placeholder="Enter gif link!" /> */}
-        <MindReaderTextField
-          className="mood-detector"
-          id="filled-search"
-          label="What are you thinking"
-          type="search"
-          variant="standard"
-          color="secondary"
-          value={inputValue}
-          onChange={onInputChange}
-        />
-        <AwesomeSubmitButton 
-          buttonText="Gif my mind!" 
-          onClick={sendGif}
-        />
-      </form>
-      <div className="gif-grid">
-        {/* Map through gifList instead of TEST_GIFS */}
-        {gifList.map((gif) => (
-          <div className="gif-item" key={gif}>
-            <img src={gif} alt={gif} />
+  const renderConnectedContainer = () => {
+
+    if (gifList === null) {
+      return (
+        <div className="connected-container">
+          <Button 
+            className="cta-button submit-gif-button" 
+            onClick={createGifAccount} 
+            variant="contained">
+            Do One-Time Initialization For GIF Program Account
+          </Button>
+        </div>
+      )
+    } else {
+      return (
+        <div className="connected-container">
+          <form
+              onSubmit={(event) => {
+                event.preventDefault();
+              }}
+            >
+          {/*         <input type="text" placeholder="Enter gif link!" /> */}
+            <MindReaderTextField
+              className="mood-detector"
+              id="filled-search"
+              label="What are you thinking"
+              type="search"
+              variant="standard"
+              color="secondary"
+              value={inputValue}
+              onChange={onInputChange}
+            />
+            <AwesomeSubmitButton 
+              buttonText="Gif my mind!" 
+              onClick={
+                sendGif
+                //ReadGifMind()
+                }
+            />
+          </form>
+          <div className="gif-grid">
+            {/* Map through gifList instead of TEST_GIFS */}
+            {gifList.map((item, index) => (
+              <div className="gif-item" key={index}>
+                <img src={item.gifLink} />
+                <Chip className="chip-user-address" label={item.userAddress.toString()} variant="outlined" />
+              </div>
+            ))}
           </div>
-        ))}
       </div>
-    </div>
-  );  
+      )
+    }
+  };
+
+  const getGifList = async() => {
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+      const account = await program.account.baseAccount.fetch(baseAccount.publicKey);
+      
+      console.log("Got the account", account)
+      setGifList(account.gifList)
+  
+    } catch (error) {
+      console.log("Error in getGifs: ", error)
+      setGifList(null);
+    }
+  }
 
   // UseEffects
   useEffect(() => {
@@ -135,9 +260,10 @@ const App = () => {
       // Call Solana program here.
   
       // Set state
-      setGifList(TEST_GIFS);
+      getGifList();
     }
   }, [walletAddress]);
+
 
   return (
     <div className="App">
