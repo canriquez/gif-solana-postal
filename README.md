@@ -4,7 +4,7 @@
 [![Netlify Status](https://api.netlify.com/api/v1/badges/6baa8b22-8acd-4dad-9ad5-df15975e5a24/deploy-status)](https://app.netlify.com/sites/anriquez-gif-mind-reader/deploys)
 
 
-![screenshot](./src/assets/NFT-Game.png)
+![screenshot](./src/assets/solana-mind-reader.png)
 
 This is a very nice and cool async, weeklong project for curious devs that want to hack around with Solana. You'll pick up some Rust, write + deploy a Solana program, and connect it all back to a React web3 app that anyone with a Solana wallet will be able to interact with!
 
