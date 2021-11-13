@@ -50,7 +50,7 @@ const App = () => {
   const [walletAddress, setWalletAddress] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const [gifList, setGifList] = useState([]);
-  const [mindReadingGif, setMindReadingGif] = useState('')
+  const [mindReadingGif, setMindReadingGif] = useState('init')
 
   // Actions
   const checkIfWalletIsConnected = async () => {
@@ -90,24 +90,25 @@ const App = () => {
   };
 
   const sendGif = async () => {
-    if (inputValue.length === 0) {
+    if (mindReadingGif.length === 0) {
       console.log("No gif link given!")
       return
     }
-    console.log('Gif link:', inputValue);
+    console.log('Gif link:', mindReadingGif);
     try {
       const provider = getProvider();
       const program = new Program(idl, programID, provider);
   
-      await program.rpc.addGif(inputValue, {
+      await program.rpc.addGif(mindReadingGif, {
         accounts: {
           baseAccount: baseAccount.publicKey,
           user: provider.wallet.publicKey,
         },
       });
-      console.log("GIF successfully sent to program", inputValue)
+      console.log("GIF successfully sent to program", mindReadingGif)
   
       await getGifList();
+      setInputValue('')
     } catch (error) {
       console.log("Error sending GIF:", error)
     }
@@ -119,22 +120,25 @@ const App = () => {
   };
 
   const ReadGifMind = async () => {
-    console.log("ReadGifMind - Called")
-    if (inputValue === '') {
+    let foundUrl = ''
+    if (inputValue.length === 0) {
       return
+    } else {
+      console.log("ReadGifMind - Called")
+      const response = await fetch(`https://api.giphy.com/v1/gifs/translate?api_key=50YVJEj4njpCtOZIPv2HcIKoRAWbuS0B&s=${inputValue}`,
+        { mode: 'cors' });
+      const responseObject = await response.json();
+    
+      foundUrl = responseObject.data.images.original.url;
+      console.log("URL found: "+foundUrl)
     }
-    const response = await fetch(`https://api.giphy.com/v1/gifs/translate?api_key=50YVJEj4njpCtOZIPv2HcIKoRAWbuS0B&s=${inputValue}`,
-      { mode: 'cors' });
-    const responseObject = await response.json();
   
-    const foundUrl = responseObject.data.images.original.url;
-  
-    if (!foundUrl) {
+    if (foundUrl.length === 0 ) {
       return Promise.reject(new Error('I dont have that mood for you!'));
+    } else {
+      setMindReadingGif(foundUrl)
+      return Promise.resolve(foundUrl);
     }
-    setMindReadingGif(foundUrl)
-    console.log(mindReadingGif)
-    return Promise.resolve('all green');
   }
 
   const getProvider = () => {
@@ -210,8 +214,7 @@ const App = () => {
             <AwesomeSubmitButton 
               buttonText="Gif my mind!" 
               onClick={
-                sendGif
-                //ReadGifMind()
+                ReadGifMind
                 }
             />
           </form>
@@ -263,6 +266,14 @@ const App = () => {
       getGifList();
     }
   }, [walletAddress]);
+
+  useEffect(() => {
+    if (mindReadingGif.length > 0 && mindReadingGif !== 'init' ) {
+      console.log('Fetching a valid GIF url...');
+      console.log(mindReadingGif)
+      sendGif()
+    }
+  }, [mindReadingGif]);
 
 
   return (
